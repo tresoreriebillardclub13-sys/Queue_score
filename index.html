@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QueueScore - Overlay OBS Billard Carambole</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&display=swap');
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: transparent;
+            font-family: 'Outfit', sans-serif;
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            overflow: hidden;
+        }
+
+        /* Barre de configuration (Masquable pour OBS) */
+        .config-bar {
+            background: rgba(19, 27, 46, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            z-index: 100;
+            margin-bottom: 20px;
+            transition: opacity 0.3s ease;
+        }
+
+        .config-bar.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .config-bar label {
+            font-size: 13px;
+            font-weight: 700;
+            color: #10B981;
+            text-transform: uppercase;
+        }
+
+        .config-bar input {
+            background: #0B0F19;
+            border: 1px solid #334155;
+            color: #ffffff;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 14px;
+            width: 200px;
+        }
+
+        .config-bar button {
+            background: #10B981;
+            color: #000000;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-weight: 800;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #EF4444;
+        }
+
+        .status-dot.connected {
+            background: #10B981;
+            box-shadow: 0 0 8px #10B981;
+        }
+
+        /* Contour Scoreboard Overlay */
+        .scoreboard-overlay {
+            display: flex;
+            align-items: stretch;
+            background: rgba(11, 15, 25, 0.92);
+            backdrop-filter: blur(12px);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+            width: 100%;
+            max-width: 900px;
+            margin-top: auto;
+        }
+
+        .player-card {
+            flex: 1;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .player-card.active {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(13, 92, 58, 0.4) 100%);
+            border-bottom: 4px solid #10B981;
+        }
+
+        .player-info {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .ball-indicator {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+
+        .player-name {
+            font-size: 22px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            max-width: 180px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .player-stats {
+            font-size: 13px;
+            color: #94A3B8;
+            font-weight: 600;
+            display: flex;
+            gap: 10px;
+            margin-top: 2px;
+        }
+
+        .player-score {
+            font-size: 52px;
+            font-weight: 900;
+            line-height: 1;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .run-badge {
+            background: #F59E0B;
+            color: #000000;
+            font-weight: 900;
+            font-size: 16px;
+            padding: 4px 10px;
+            border-radius: 8px;
+            margin-left: 12px;
+            animation: pulse 1.5s infinite;
+        }
+
+        .center-divider {
+            width: 150px;
+            background: rgba(18, 24, 36, 0.95);
+            border-left: 1px solid rgba(255, 255, 255, 0.1);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 12px;
+        }
+
+        .game-mode-label {
+            font-size: 11px;
+            font-weight: 800;
+            color: #10B981;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .innings-display {
+            font-size: 14px;
+            font-weight: 700;
+            color: #CBD5E1;
+            margin: 2px 0;
+        }
+
+        .timer-display {
+            font-size: 20px;
+            font-weight: 900;
+            color: #F59E0B;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 2px 10px;
+            border-radius: 20px;
+        }
+
+        .timer-display.low {
+            color: #EF4444;
+            animation: flash 0.6s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes flash {
+            from { opacity: 1; }
+            to { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Barre de configuration IP pour Vercel -->
+    <div class="config-bar" id="configBar">
+        <div class="status-dot" id="statusDot"></div>
+        <label for="ipInput">IP Tablette Android :</label>
+        <input type="text" id="ipInput" placeholder="ex: 192.168.1.50:8080" />
+        <button id="connectBtn" onclick="initConnection()">Connecter</button>
+        <button onclick="toggleConfigBar()" style="background: #334155; color: #fff;">Masquer Bar</button>
+    </div>
+
+    <!-- Overlay OBS -->
+    <div class="scoreboard-overlay" id="overlay">
+        <!-- Joueur A -->
+        <div class="player-card" id="cardA">
+            <div class="player-info">
+                <div class="ball-indicator" id="ballA" style="background: #FFFFFF;"></div>
+                <div>
+                    <div class="player-name" id="nameA">Joueur A</div>
+                    <div class="player-stats">
+                        <span>MOY: <b id="avgA">0.000</b></span>
+                        <span>SÉR: <b id="highA">0</b></span>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center;">
+                <div class="player-score" id="scoreA">0</div>
+                <div class="run-badge" id="runA" style="display: none;">+0</div>
+            </div>
+        </div>
+
+        <!-- Centre -->
+        <div class="center-divider">
+            <div class="game-mode-label" id="gameMode">3-BANDES</div>
+            <div class="innings-display">REP: <span id="inningsCount">0</span> / <span id="targetScore">40</span></div>
+            <div class="timer-display" id="timer">40s</div>
+        </div>
+
+        <!-- Joueur B -->
+        <div class="player-card" id="cardB">
+            <div style="display: flex; align-items: center;">
+                <div class="run-badge" id="runB" style="display: none;">+0</div>
+                <div class="player-score" id="scoreB">0</div>
+            </div>
+            <div class="player-info">
+                <div>
+                    <div class="player-name" id="nameB" style="text-align: right;">Joueur B</div>
+                    <div class="player-stats" style="justify-content: flex-end;">
+                        <span>SÉR: <b id="highB">0</b></span>
+                        <span>MOY: <b id="avgB">0.000</b></span>
+                    </div>
+                </div>
+                <div class="ball-indicator" id="ballB" style="background: #FACC15;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+
+        function getStoredIp() {
+            return localStorage.getItem('queuescore_tablet_ip') || window.location.host;
+        }
+
+        document.getElementById('ipInput').value = getStoredIp();
+
+        function toggleConfigBar() {
+            document.getElementById('configBar').classList.toggle('hidden');
+        }
+
+        function initConnection() {
+            let target = document.getElementById('ipInput').value.trim();
+            if (!target) return;
+            localStorage.setItem('queuescore_tablet_ip', target);
+
+            if (socket) {
+                socket.close();
+            }
+
+            if (!target.includes(':')) {
+                target = target + ':8080';
+            }
+
+            const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + target + '/ws';
+            const statusDot = document.getElementById('statusDot');
+
+            try {
+                socket = new WebSocket(wsUrl);
+
+                socket.onopen = function() {
+                    statusDot.classList.add('connected');
+                };
+
+                socket.onmessage = function(event) {
+                    try {
+                        const state = JSON.parse(event.data);
+                        updateUI(state);
+                    } catch(e) {
+                        console.error('Erreur parsing JSON:', e);
+                    }
+                };
+
+                socket.onclose = function() {
+                    statusDot.classList.remove('connected');
+                    setTimeout(initConnection, 3000);
+                };
+
+                socket.onerror = function() {
+                    statusDot.classList.remove('connected');
+                    socket.close();
+                };
+            } catch(e) {
+                statusDot.classList.remove('connected');
+            }
+        }
+
+        function updateUI(s) {
+            document.getElementById('nameA').textContent = s.a_name || 'Joueur A';
+            document.getElementById('scoreA').textContent = s.a_score;
+            document.getElementById('ballA').style.background = s.a_color || '#FFFFFF';
+            const avgA = s.a_innings > 0 ? (s.a_score / s.a_innings).toFixed(3) : '0.000';
+            document.getElementById('avgA').textContent = avgA;
+            document.getElementById('highA').textContent = s.a_high_run;
+
+            document.getElementById('nameB').textContent = s.b_name || 'Joueur B';
+            document.getElementById('scoreB').textContent = s.b_score;
+            document.getElementById('ballB').style.background = s.b_color || '#FACC15';
+            const avgB = s.b_innings > 0 ? (s.b_score / s.b_innings).toFixed(3) : '0.000';
+            document.getElementById('avgB').textContent = avgB;
+            document.getElementById('highB').textContent = s.b_high_run;
+
+            document.getElementById('gameMode').textContent = s.game_mode || 'CARAMBOLE';
+            document.getElementById('inningsCount').textContent = Math.max(s.a_innings, s.b_innings);
+            document.getElementById('targetScore').textContent = s.target_score;
+
+            const timerEl = document.getElementById('timer');
+            timerEl.textContent = s.timer_remaining + 's';
+            if (s.timer_remaining <= 10) {
+                timerEl.classList.add('low');
+            } else {
+                timerEl.classList.remove('low');
+            }
+
+            const cardA = document.getElementById('cardA');
+            const cardB = document.getElementById('cardB');
+            const runA = document.getElementById('runA');
+            const runB = document.getElementById('runB');
+
+            if (s.current_turn === 'PLAYER_A') {
+                cardA.classList.add('active');
+                cardB.classList.remove('active');
+                if (s.a_current_run > 0) {
+                    runA.style.display = 'inline-block';
+                    runA.textContent = '+' + s.a_current_run;
+                } else {
+                    runA.style.display = 'none';
+                }
+                runB.style.display = 'none';
+            } else {
+                cardB.classList.add('active');
+                cardA.classList.remove('active');
+                if (s.b_current_run > 0) {
+                    runB.style.display = 'inline-block';
+                    runB.textContent = '+' + s.b_current_run;
+                } else {
+                    runB.style.display = 'none';
+                }
+                runA.style.display = 'none';
+            }
+        }
+
+        initConnection();
+    </script>
+</body>
+</html>
